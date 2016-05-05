@@ -219,7 +219,7 @@ function Publish {
 	Write-Log "Publishing package..." -ForegroundColor Green
 
 	# Get nuget config
-	[xml]$nugetConfig = Get-Content .\NuGet.Config
+	[xml]$nugetConfig = Get-Content .\..\Nuget\NuGet.Config
 	
 	$nugetConfig.configuration.packageSources.add | ForEach-Object {
 		$url = $_.value
