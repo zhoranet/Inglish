@@ -1,6 +1,6 @@
 ﻿namespace Inglish
 {
-    public class Token
+    public class Morph
     {
         public MorphType MorphType { get; set; }
         public int Index { get; set; }

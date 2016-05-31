@@ -4,25 +4,20 @@ using System.Linq;
 
 namespace Inglish
 {
-    public class Parser
+    public class Parser : IParser
     {
+        private readonly IThesaurus _thesaurus;
         private const string TokenSeparatorString = " ,.!_>+'\"";
 
         private static readonly char[] TokenSeparators = TokenSeparatorString.ToCharArray();
 
-        public static readonly Dictionary<TokenType, Type> TokenKeyTypes = new Dictionary<TokenType, Type>
+        
+        public Parser(IThesaurus thesaurus)
         {
-            {TokenType.Verb, typeof (VerbKey)},
-            {TokenType.Noun, typeof (NounKey)},
-            {TokenType.Adjective, typeof (AdjectiveKey)},
-            {TokenType.Adverb, typeof (AdverbKey)},
-            {TokenType.Article, typeof (ArticleKey)},
-            {TokenType.Conjunction, typeof (ConjunctionKey)},
-            {TokenType.Preposition, typeof (PrepositionKey)},
-            {TokenType.Pronoun, typeof (PronounKey)}
-        };
+            _thesaurus = thesaurus;
+        }
 
-        public Command DoCommand(string text)
+        public TokenCommand DoCommand(string text)
         {
             var words = Tokenise(text);
             var tokenSet = GetTokenSet(words);
@@ -46,9 +41,9 @@ namespace Inglish
         // ADJECTIVE LIST = ADJECTIVE [[<CONJUNCTION>] ADJECTIVE LIST]
         //
         //-----------------------------------------------
-        internal Command ParseSentence(TokenSet tokens)
+        internal TokenCommand ParseSentence(TokenSet tokens)
         {
-            var cmd = new Command();
+            var cmd = new TokenCommand();
 
             tokens.Reset();
 
@@ -56,18 +51,18 @@ namespace Inglish
 
             var token = tokens.Current;
 
-            if (token.TokenType == TokenType.Verb)
+            if (token.MorphType == MorphType.Verb)
             {
-                var tokenVerb = token.GetKey<VerbKey>();
+                var tokenVerb = token;
 
-                if (tokenVerb == VerbKey.Say || tokenVerb == VerbKey.Talk)
+                if (tokenVerb.Value == _thesaurus.Keywords.VerbSay || tokenVerb.Value == _thesaurus.Keywords.VerbTalk)
                 {
                     cmd.Verb = tokenVerb;
                     if (!tokens.MoveNext()) return null;
 
-                    if (tokens.Current.TokenType == TokenType.Preposition)
+                    if (tokens.Current.MorphType == MorphType.Preposition)
                     {
-                        cmd.Preposition = tokens.Current.GetKey<PrepositionKey>();
+                        cmd.Preposition = tokens.Current.Value;
                         if (!tokens.MoveNext()) return null;
                     }
 
@@ -84,7 +79,7 @@ namespace Inglish
 
             ParseCommand(tokens, cmd);
 
-            while (!tokens.IsFinished && tokens.Current.TokenType == TokenType.Conjunction)
+            while (!tokens.IsFinished && tokens.Current.MorphType == MorphType.Conjunction)
             {
                 ParseCommand(tokens, cmd);
             }
@@ -92,27 +87,27 @@ namespace Inglish
             return cmd;
         }
 
-        internal void ParseCommand(TokenSet tokens, Command cmd)
+        internal void ParseCommand(TokenSet tokens, TokenCommand cmd)
         {
-            if (tokens.Current.TokenType == TokenType.Adverb)
+            if (tokens.Current.MorphType == MorphType.Adverb)
             {
                 ParseAdverbList(tokens, cmd);
             }
 
-            if (tokens.Current.TokenType == TokenType.Verb)
+            if (tokens.Current.MorphType == MorphType.Verb)
             {
-                cmd.Verb = tokens.Current.GetKey<VerbKey>();
+                cmd.Verb = tokens.Current;
                 tokens.MoveNext();
             }
 
             if (tokens.IsFinished) return;
 
-            if (tokens.Current.TokenType == TokenType.Preposition)
+            if (tokens.Current.MorphType == MorphType.Preposition)
             {
-                cmd.Preposition = tokens.Current.GetKey<PrepositionKey>();
+                cmd.Preposition = tokens.Current.Value;
             }
 
-            while (tokens.Current.TokenType == TokenType.Preposition && tokens.MoveNext())
+            while (tokens.Current.MorphType == MorphType.Preposition && tokens.MoveNext())
             {
             }
 
@@ -126,8 +121,13 @@ namespace Inglish
 
             if (tokens.IsFinished) return;
 
-            while (tokens.Current.TokenType == TokenType.Preposition && tokens.MoveNext())
+            while (tokens.Current.MorphType == MorphType.Preposition )
             {
+                if (cmd.Preposition == null)
+                {
+                    cmd.Preposition = tokens.Current.Value;
+                }
+                if( !tokens.MoveNext() ) break;
             }
 
             if (tokens.IsFinished) return;
@@ -159,9 +159,9 @@ namespace Inglish
             token = null;
             var foundToken = false;
 
-            foreach (var tokenKeyType in TokenKeyTypes)
+            foreach (var morphType in _thesaurus.MorphTypes)
             {
-                if (TryCreateToken(tokenKeyType.Key, tokenKeyType.Value, word, out token))
+                if (TryCreateToken(morphType.Key, morphType.Value, word, out token))
                 {
                     foundToken = true;
                     break;
@@ -171,16 +171,15 @@ namespace Inglish
             return foundToken;
         }
 
-        internal bool TryCreateToken(TokenType tokenKeyType, Type tokenType, string word, out Token token)
+        internal bool TryCreateToken(MorphType morphKeyType, IList<Token> tokens, string word, out Token token)
         {
             token = new Token();
             var foundToken = false;
-            foreach (var tokenKey in Enum.GetValues(tokenType))
+            foreach (var morph in tokens)
             {
-                if (CompareTokens(word, tokenKey))
+                if (CompareTokens(word, morph.Value))
                 {
-                    token.TokenType = tokenKeyType;
-                    token.SetKey(tokenKey);
+                    token = morph;
                     foundToken = true;
                     break;
                 }
@@ -200,21 +199,21 @@ namespace Inglish
                 .Select(x => x.ToLowerInvariant()).ToArray();
         }
 
-        internal void ParseAdverbList(TokenSet tokens, Command cmd)
+        internal void ParseAdverbList(TokenSet tokens, TokenCommand cmd)
         {
             var finished = false;
 
-            if (tokens.Current.TokenType != TokenType.Adverb) return;
+            if (tokens.Current.MorphType != MorphType.Adverb) return;
 
             while (!finished)
             {
-                switch (tokens.Current.TokenType)
+                switch (tokens.Current.MorphType)
                 {
-                    case TokenType.Adverb:
-                        cmd.Adverbs.Add(tokens.Current.GetKey<AdverbKey>());
+                    case MorphType.Adverb:
+                        cmd.Adverbs.Add(tokens.Current);
                         finished = !tokens.MoveNext();
                         break;
-                    case TokenType.Conjunction:
+                    case MorphType.Conjunction:
                         finished = !tokens.MoveNext();
                         break;
                     default:
@@ -226,19 +225,19 @@ namespace Inglish
 
         internal void ParseAdjectiveList(TokenSet tokens, TokenObject tokenObject)
         {
-            if (tokens.Current.TokenType != TokenType.Adjective) return;
+            if (tokens.Current.MorphType != MorphType.Adjective) return;
 
             var finished = false;
 
             while (!finished)
             {
-                switch (tokens.Current.TokenType)
+                switch (tokens.Current.MorphType)
                 {
-                    case TokenType.Adjective:
-                        tokenObject.Adjectives.Add(tokens.Current.GetKey<AdjectiveKey>());
+                    case MorphType.Adjective:
+                        tokenObject.Adjectives.Add(tokens.Current);
                         finished = !tokens.MoveNext();
                         break;
-                    case TokenType.Conjunction:
+                    case MorphType.Conjunction:
                         finished = !tokens.MoveNext();
                         break;
                     default:
@@ -248,23 +247,23 @@ namespace Inglish
             }
         }
 
-        internal void ParseObjectList(TokenSet tokens, Command cmd)
+        internal void ParseObjectList(TokenSet tokens, TokenCommand cmd)
         {
             var finished = false;
 
             while (!finished)
             {
-                switch (tokens.Current.TokenType)
+                switch (tokens.Current.MorphType)
                 {
-                    case TokenType.Adjective:
-                    case TokenType.Noun:
-                    case TokenType.Pronoun:
+                    case MorphType.Adjective:
+                    case MorphType.Noun:
+                    case MorphType.Pronoun:
                         ParseObject(tokens, cmd);
                         finished = tokens.IsFinished;
                         break;
 
-                    case TokenType.Conjunction:
-                    case TokenType.Article:
+                    case MorphType.Conjunction:
+                    case MorphType.Article:
                         finished = !tokens.MoveNext();
                         break;
                     default:
@@ -277,12 +276,12 @@ namespace Inglish
         //--------------------------------------
         // OBJECT      = [ADJECTIVE LIST] <NOUN>
         // OBJECT      = <PRONOUN>
-        internal bool ParseObject(TokenSet tokens, Command cmd)
+        internal bool ParseObject(TokenSet tokens, TokenCommand cmd)
         {
             var finished = false;
             var tokenObject = new TokenObject();
 
-            if (tokens.Current.TokenType == TokenType.Adjective)
+            if (tokens.Current.MorphType == MorphType.Adjective)
             {
                 ParseAdjectiveList(tokens, tokenObject);
                 finished = tokens.IsFinished;
@@ -290,16 +289,16 @@ namespace Inglish
 
             if (!finished)
             {
-                switch (tokens.Current.TokenType)
+                switch (tokens.Current.MorphType)
                 {
-                    case TokenType.Noun:
-                        tokenObject.Noun = tokens.Current.GetKey<NounKey>();
+                    case MorphType.Noun:
+                        tokenObject.Noun = tokens.Current.Value;
                         tokens.MoveNext();
                         cmd.Objects.Add(tokenObject);
                         finished = true;
                         break;
-                    case TokenType.Pronoun:
-                        finished = ParseObjectPronoun(tokens.Current.GetKey<PronounKey>(), tokenObject, cmd);
+                    case MorphType.Pronoun:
+                        finished = ParseObjectPronoun(tokens.Current, tokenObject, cmd);
                         tokens.MoveNext();
                         break;
                 }
@@ -308,44 +307,42 @@ namespace Inglish
             return finished;
         }
 
-        internal bool ParseObjectPronoun(PronounKey pronounKey, TokenObject tokenObject, Command cmd)
+        internal bool ParseObjectPronoun(Token pronounKey, TokenObject tokenObject, TokenCommand cmd)
         {
             var result = false;
 
-            switch (pronounKey)
+            if (pronounKey.Value == _thesaurus.Keywords.PronounAll || pronounKey.Value == _thesaurus.Keywords.PronounEverything)
             {
-                case PronounKey.All:
-                case PronounKey.Everything:
-                    tokenObject.Noun = NounKey._ALL_;
-                    cmd.Objects.Add(tokenObject);
-                    result = true;
-                    break;
-                case PronounKey.Me:
-                    tokenObject.Noun = NounKey.Hobbit;
-                    cmd.Objects.Add(tokenObject);
-                    result = true;
-                    break;
+                tokenObject.Noun = _thesaurus.Keywords.NounAll;
+                cmd.Objects.Add(tokenObject);
+                result = true;
+            }
+            else if (pronounKey.Value == _thesaurus.Keywords.PronounMe)
+            {
+                tokenObject.Noun = _thesaurus.Keywords.NounMyName;
+                cmd.Objects.Add(tokenObject);
+                result = true;
             }
 
             return result;
         }
 
-        internal void ParseSubjectList(TokenSet tokens, Command cmd)
+        internal void ParseSubjectList(TokenSet tokens, TokenCommand cmd)
         {
             var finished = false;
 
             while (!finished)
             {
-                switch (tokens.Current.TokenType)
+                switch (tokens.Current.MorphType)
                 {
-                    case TokenType.Adjective:
-                    case TokenType.Noun:
-                    case TokenType.Pronoun:
+                    case MorphType.Adjective:
+                    case MorphType.Noun:
+                    case MorphType.Pronoun:
                         ParseSubject(tokens, cmd);
                         finished = tokens.IsFinished;
                         break;
-                    case TokenType.Conjunction:
-                    case TokenType.Article:
+                    case MorphType.Conjunction:
+                    case MorphType.Article:
                         finished = !tokens.MoveNext();
                         break;
                     default:
@@ -355,27 +352,27 @@ namespace Inglish
             }
         }
 
-        internal bool ParseSubject(TokenSet tokens, Command cmd)
+        internal bool ParseSubject(TokenSet tokens, TokenCommand cmd)
         {
             var tokenObject = new TokenObject();
 
             var result = false;
-            if (tokens.Current.TokenType == TokenType.Adjective)
+            if (tokens.Current.MorphType == MorphType.Adjective)
             {
                 ParseAdjectiveList(tokens, tokenObject);
                 if (tokens.Current == null) return result;
             }
 
-            switch (tokens.Current.TokenType)
+            switch (tokens.Current.MorphType)
             {
-                case TokenType.Noun:
-                    tokenObject.Noun = tokens.Current.GetKey<NounKey>();
+                case MorphType.Noun:
+                    tokenObject.Noun = tokens.Current.Value;
                     tokens.MoveNext();
                     cmd.Subjects.Add(tokenObject);
                     result = true;
                     break;
-                case TokenType.Pronoun:
-                    result = ParseSubjectPronoun(tokens.Current.GetKey<PronounKey>(), tokenObject, cmd);
+                case MorphType.Pronoun:
+                    result = ParseSubjectPronoun(tokens.Current, tokenObject, cmd);
                     tokens.MoveNext();
                     break;
             }
@@ -383,23 +380,21 @@ namespace Inglish
             return result;
         }
 
-        internal bool ParseSubjectPronoun(PronounKey pronoun, TokenObject tokenObject, Command cmd)
+        internal bool ParseSubjectPronoun(Token pronoun, TokenObject tokenObject, TokenCommand cmd)
         {
             var result = false;
 
-            switch (pronoun)
+            if (pronoun.Value == _thesaurus.Keywords.PronounAll || pronoun.Value == _thesaurus.Keywords.PronounEverything)
             {
-                case PronounKey.All:
-                case PronounKey.Everything:
-                    tokenObject.Noun = NounKey._ALL_;
-                    cmd.Subjects.Add(tokenObject);
-                    result = true;
-                    break;
-                case PronounKey.Me:
-                    tokenObject.Noun = NounKey.Hobbit;
-                    cmd.Subjects.Add(tokenObject);
-                    result = true;
-                    break;
+                tokenObject.Noun = _thesaurus.Keywords.NounAll;
+                cmd.Subjects.Add(tokenObject);
+                result = true;
+            }
+            else if (pronoun.Value == _thesaurus.Keywords.PronounMe)
+            {
+                tokenObject.Noun = _thesaurus.Keywords.NounMyName;
+                cmd.Subjects.Add(tokenObject);
+                result = true;
             }
 
             return result;

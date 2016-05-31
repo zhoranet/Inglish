@@ -1,4 +1,5 @@
 ﻿using System;
+using Inglish.Test;
 using Newtonsoft.Json;
 
 namespace Inglish.TestBench
@@ -9,7 +10,7 @@ namespace Inglish.TestBench
         {
             try
             {
-                var parser = new Parser();
+                var parser = new Parser(new Thesaurus());
                 Console.WriteLine("Type sentence and press ENTER:");
                 var cmd = parser.DoCommand(Console.ReadLine());
                 Console.WriteLine(JsonConvert.SerializeObject(cmd));

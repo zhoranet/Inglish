@@ -2,9 +2,9 @@ using System.Collections.Generic;
 
 namespace Inglish
 {
-    public class Command
+    public class TokenCommand
     {
-        public Command()
+        public TokenCommand()
         {
             Objects = new List<TokenObject>();
             Subjects = new List<TokenObject>();

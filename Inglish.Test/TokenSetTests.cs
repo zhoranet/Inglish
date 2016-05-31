@@ -1,5 +1,4 @@
-﻿using System;
-using FluentAssertions;
+﻿using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Inglish.Test
@@ -19,10 +18,10 @@ namespace Inglish.Test
         public void Current_InitTwoTokes_CurrentHasValue()
         {
             var tokenSet =
-                new TokenSet(new[] {new Token {TokenType = TokenType.Noun}, new Token {TokenType = TokenType.Verb}});
+                new TokenSet(new[] {new Token {MorphType = MorphType.Noun}, new Token {MorphType = MorphType.Verb}});
             tokenSet.MoveNext();
             tokenSet.MoveNext();
-            tokenSet.Current.TokenType.Should().Be(TokenType.Verb);
+            tokenSet.Current.MorphType.Should().Be(MorphType.Verb);
         }
     }
 }

@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Inglish
 {
-    public class TokenSet : IEnumerator<Token>
+    internal class TokenSet : IEnumerator<Token>
     {
         private readonly List<Token> _tokens;
         private int _position = -1;

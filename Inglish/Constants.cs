@@ -1,6 +1,6 @@
 ﻿namespace Inglish
 {
-    public enum TokenType
+    public enum MorphType
     {
         Verb,
         Adjective,
@@ -413,14 +413,5 @@
         Warg,
         Wood,
         _ALL_
-    }
-
-    public enum VerbScope
-    {
-        All,
-        None,
-        Npcs,
-        Location,
-        Held
     }
 }
